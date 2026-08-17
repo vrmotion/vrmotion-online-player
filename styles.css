@@ -1223,3 +1223,165 @@ body {
   height: 28px;
   line-height: 28px;
 }
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gyro-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+.gyro-button svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.gyro-button.is-active {
+  color: #75d8ff;
+  filter: drop-shadow(0 0 7px rgba(42, 183, 255, 0.65));
+}
+
+@media (max-width: 560px) {
+  :root {
+    --device-height: 100dvh;
+  }
+
+  html,
+  body,
+  .page-shell,
+  .device-frame {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .device-frame {
+    width: 100vw;
+  }
+
+  .player-controls {
+    bottom: 0;
+    padding: 12px 14px max(14px, env(safe-area-inset-bottom));
+  }
+
+  .controls-row {
+    margin-top: 10px;
+  }
+
+  .icon-button {
+    width: 48px;
+    height: 48px;
+  }
+
+  .icon-button-main {
+    width: 64px;
+    height: 64px;
+  }
+
+  .volume-inline {
+    gap: 4px;
+  }
+
+  .volume-bar-inline {
+    width: 38px;
+  }
+
+  .landing-girls-art {
+    margin-top: -72px;
+    opacity: 1;
+    filter: brightness(1.2) drop-shadow(-10px 0 22px rgba(255, 42, 168, 0.12)) drop-shadow(10px 0 24px rgba(30, 164, 255, 0.12));
+  }
+}
+
+@media (max-width: 560px) and (max-height: 760px) {
+  .landing-girls-art {
+    margin-top: -66px;
+  }
+}
+
+/* Keep the approved cover composition intact at every browser zoom level. */
+.landing-art {
+  overflow: hidden;
+}
+
+.landing-content {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: 440px;
+  height: 920px;
+  padding: 0;
+  display: block;
+  overflow: visible;
+  transform: translate(-50%, -50%) scale(var(--landing-scale, 1));
+  transform-origin: center;
+}
+
+.landing-logo-final,
+.landing-title-art,
+.landing-tips-art,
+.landing-girls-art,
+.landing-cta,
+.landing-social-crop {
+  position: absolute;
+  left: 50%;
+  margin: 0;
+  flex: none;
+  transform: translateX(-50%);
+}
+
+.landing-logo-final {
+  top: 42px;
+  width: 31%;
+}
+
+.landing-title-art {
+  top: 102px;
+  width: 88%;
+}
+
+.landing-tips-art {
+  top: 202px;
+  width: 92%;
+}
+
+.landing-girls-art {
+  top: 308px;
+  width: 75.5%;
+  height: auto;
+  min-height: 0;
+  opacity: 1;
+  filter: brightness(1.2) drop-shadow(-10px 0 22px rgba(255, 42, 168, 0.12)) drop-shadow(10px 0 24px rgba(30, 164, 255, 0.12));
+}
+
+.landing-cta {
+  top: 704px;
+  width: 88%;
+  z-index: 4;
+}
+
+.landing-social-crop {
+  top: 824px;
+  width: 46.5%;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .landing-cta:hover,
+  .landing-cta:focus-visible {
+    transform: translateX(-50%);
+  }
+}
