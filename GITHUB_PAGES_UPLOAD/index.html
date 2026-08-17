@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VRMotion Online Player</title>
+  <meta name="description" content="VRMotion online player for VR180, 360 and immersive video playback.">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=20260817-41">
+</head>
+<body>
+  <div class="page-shell">
+    <div class="ambient ambient-left"></div>
+    <div class="ambient ambient-right"></div>
+
+    <main class="device-frame" aria-label="VRMotion online player">
+      <section class="landing-screen" id="landingScreen">
+        <div class="landing-art">
+          <div class="landing-content">
+            <img src="./assets/vrmotion_logo.png" alt="VRMotion" class="landing-logo-final">
+            <img src="./assets/landing_title.webp" alt="Online Player — Exclusive Immersive VR / 360 Content" class="landing-title-art">
+            <img src="./assets/landing_tips.webp" alt="Drag mouse, scroll to zoom, swipe on phone, VR mode" class="landing-tips-art">
+            <img src="./assets/landing_girls.webp" alt="" class="landing-girls-art">
+
+            <button class="landing-cta" id="startPlayback" type="button" aria-label="Watch in browser">
+              <img src="./assets/landing_watch.webp" alt="Watch in browser">
+            </button>
+
+            <div class="landing-social-crop" aria-label="VRMotion social links">
+              <img src="./assets/landing_socials.webp" alt="Patreon and Boosty" class="landing-social-source">
+              <a class="landing-social-hit landing-social-patreon" href="https://www.patreon.com/c/VRMOTION" target="_blank" rel="noreferrer noopener" aria-label="VRMotion on Patreon"></a>
+              <a class="landing-social-hit landing-social-boosty" href="https://boosty.to/vrmotion" target="_blank" rel="noreferrer noopener" aria-label="VRMotion on Boosty"></a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="player-screen is-hidden" id="playerScreen">
+        <div class="video-backdrop"></div>
+        <video id="video" class="video-surface" playsinline webkit-playsinline preload="metadata"></video>
+        <div id="viewer" class="projection-viewer"></div>
+        <button type="button" class="back-button" id="backButton" aria-label="Вернуться назад">
+          <span class="back-button-arrow">‹</span>
+          <span class="back-button-text">BACK</span>
+        </button>
+        <div class="quality-indicator">
+          <span class="quality-pill quality-pill-live" id="qualityBadge">AUTO</span>
+        </div>
+
+        <div class="player-corner-links">
+          <a class="player-corner-link" href="https://www.patreon.com/c/VRMOTION" target="_blank" rel="noreferrer noopener">PATREON</a>
+          <a class="player-corner-link" href="https://boosty.to/vrmotion" target="_blank" rel="noreferrer noopener">BOOSTY</a>
+        </div>
+
+        <header class="player-header">
+          <div class="header-meta">
+            <label class="quality-select-wrap quality-select-top">
+              <span class="sr-only">Quality</span>
+              <select id="qualitySelect" class="quality-select" aria-label="Quality">
+                <option value="" selected disabled>—</option>
+              </select>
+            </label>
+          </div>
+        </header>
+
+        <div class="player-center" id="playerCenterOverlay">
+          <button type="button" class="big-play" id="bigPlayButton" aria-label="Play or pause">
+            <img src="./assets/play_button.png" alt="">
+          </button>
+        </div>
+
+        <section class="player-status" id="playerStatus">
+          <h1 class="player-title" id="videoTitle"></h1>
+          <p class="player-description" id="videoDescription"></p>
+        </section>
+
+        <footer class="player-controls">
+          <div class="timeline-wrap">
+            <span class="time-label" id="currentTimeLabel">00:00</span>
+            <input id="seekBar" class="timeline" type="range" min="0" max="100" value="0" step="0.1" aria-label="Seek">
+            <span class="time-label" id="durationLabel">00:00</span>
+          </div>
+
+          <div class="controls-row">
+            <div class="controls-left">
+              <button type="button" class="icon-button" id="prevButton" aria-label="Previous">
+                <img src="./assets/prev_button.png" alt="">
+              </button>
+              <button type="button" class="icon-button icon-button-main" id="playPauseButton" aria-label="Play or pause">
+                <img src="./assets/play_button.png" alt="">
+              </button>
+              <button type="button" class="icon-button" id="nextButton" aria-label="Next">
+                <img src="./assets/next_button.png" alt="">
+              </button>
+              <div class="volume-inline">
+                <button type="button" class="icon-button icon-button-sound" id="volumeButton" aria-label="Звук">
+                  <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+                    <path d="M15 25 H25 L37 15 V49 L25 39 H15 Z" fill="#ffffff"></path>
+                    <path d="M43 24 C47 27, 49 31, 49 32 C49 33, 47 37, 43 40" fill="none" stroke="#2ab7ff" stroke-width="4" stroke-linecap="round"></path>
+                  </svg>
+                </button>
+                <input id="volumeBar" class="volume-bar volume-bar-inline" type="range" min="0" max="100" value="100" step="1" aria-label="Volume">
+                <button type="button" class="icon-button" id="fullscreenButton" aria-label="Полный экран">
+                  <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+                    <path d="M16 26 V16 H26" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path>
+                    <path d="M38 16 H48 V26" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path>
+                    <path d="M48 38 V48 H38" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path>
+                    <path d="M26 48 H16 V38" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="controls-right">
+            </div>
+          </div>
+        </footer>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+  <script type="module" src="./app.js?v=20260817-28"></script>
+</body>
+</html>
