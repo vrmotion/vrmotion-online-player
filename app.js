@@ -74,6 +74,7 @@ const seekBar = document.getElementById("seekBar");
 const volumeBar = document.getElementById("volumeBar");
 const currentTimeLabel = document.getElementById("currentTimeLabel");
 const durationLabel = document.getElementById("durationLabel");
+const externalLinks = document.querySelectorAll('a[href*="patreon.com"], a[href*="boosty.to"]');
 
 const playIconMarkup = `
   <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
@@ -92,6 +93,13 @@ const pauseIconMarkup = `
 
 function setButtonIcon(button, isPause) {
   button.innerHTML = isPause ? pauseIconMarkup : playIconMarkup;
+}
+
+function openExternalLink(event) {
+  const link = event.currentTarget;
+  if (!link?.href) return;
+  event.preventDefault();
+  window.open(link.href, "_blank", "noopener,noreferrer");
 }
 
 if (playerTitle) {
@@ -732,6 +740,12 @@ if (vrButton) {
     revealUi();
   });
 }
+
+externalLinks.forEach((link) => {
+  link.target = "_blank";
+  link.rel = "noreferrer noopener";
+  link.addEventListener("click", openExternalLink);
+});
 
 viewer.addEventListener("wheel", handleViewerWheel, { passive: false });
 viewer.addEventListener("touchstart", handleTouchStart, { passive: false });
