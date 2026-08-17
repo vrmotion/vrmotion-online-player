@@ -16,6 +16,11 @@ const state = {
   touchZoomDistance: 0,
   uiVisible: true,
   uiHideTimer: 0,
+  gyroEnabled: false,
+  deviceOrientation: null,
+  playRequest: null,
+  hlsStopped: false,
+  pseudoFullscreen: false,
 };
 
 function normalizeMode(value) {
@@ -26,6 +31,24 @@ function normalizeMode(value) {
 }
 
 const landingScreen = document.getElementById("landingScreen");
+const landingArt = document.querySelector(".landing-art");
+const landingContent = document.querySelector(".landing-content");
+
+function resizeLandingCover() {
+  if (!landingArt || !landingContent) return;
+
+  const scale = Math.min(
+    landingArt.clientWidth / 440,
+    landingArt.clientHeight / 920
+  );
+  landingContent.style.setProperty("--landing-scale", String(scale));
+}
+
+if (landingArt && landingContent) {
+  new ResizeObserver(resizeLandingCover).observe(landingArt);
+  window.addEventListener("resize", resizeLandingCover, { passive: true });
+  resizeLandingCover();
+}
 const playerScreen = document.getElementById("playerScreen");
 const viewer = document.getElementById("viewer");
 const startPlaybackButton = document.getElementById("startPlayback");
@@ -35,6 +58,7 @@ const prevButton = document.getElementById("prevButton");
 const nextButton = document.getElementById("nextButton");
 const volumeButton = document.getElementById("volumeButton");
 const fullscreenButton = document.getElementById("fullscreenButton");
+const gyroButton = document.getElementById("gyroButton");
 const backButton = document.getElementById("backButton");
 const vrButton = document.getElementById("vrButton");
 const playerCenterOverlay = document.getElementById("playerCenterOverlay");
@@ -102,6 +126,60 @@ controls.enableZoom = false;
 controls.rotateSpeed = -0.25;
 controls.target.set(0, 0, 0);
 controls.update();
+
+const gyroEuler = new THREE.Euler();
+const gyroQ0 = new THREE.Quaternion();
+const gyroQ1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+const gyroZAxis = new THREE.Vector3(0, 0, 1);
+
+function handleDeviceOrientation(event) {
+  state.deviceOrientation = event;
+}
+
+function updateGyroscopeCamera() {
+  const event = state.deviceOrientation;
+  if (!state.gyroEnabled || !event || event.alpha === null) return;
+
+  const alpha = THREE.MathUtils.degToRad(event.alpha || 0);
+  const beta = THREE.MathUtils.degToRad(event.beta || 0);
+  const gamma = THREE.MathUtils.degToRad(event.gamma || 0);
+  const screenAngle = THREE.MathUtils.degToRad(window.screen?.orientation?.angle || window.orientation || 0);
+
+  gyroEuler.set(beta, alpha, -gamma, "YXZ");
+  camera.quaternion.setFromEuler(gyroEuler);
+  camera.quaternion.multiply(gyroQ1);
+  camera.quaternion.multiply(gyroQ0.setFromAxisAngle(gyroZAxis, -screenAngle));
+}
+
+async function toggleGyroscope() {
+  const orientationApi = window.DeviceOrientationEvent;
+  if (!orientationApi) return;
+
+  if (!state.gyroEnabled && typeof orientationApi.requestPermission === "function") {
+    try {
+      const permission = await orientationApi.requestPermission();
+      if (permission !== "granted") return;
+    } catch {
+      return;
+    }
+  }
+
+  state.gyroEnabled = !state.gyroEnabled;
+  controls.enabled = !state.gyroEnabled;
+  state.deviceOrientation = null;
+  window.removeEventListener("deviceorientation", handleDeviceOrientation);
+  if (state.gyroEnabled) {
+    window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+  }
+  gyroButton?.classList.toggle("is-active", state.gyroEnabled);
+  gyroButton?.setAttribute("aria-label", state.gyroEnabled
+    ? "Сейчас управление поворотом телефона. Нажмите для управления пальцем"
+    : "Сейчас управление пальцем. Нажмите для управления поворотом телефона");
+  if (gyroButton) {
+    gyroButton.title = state.gyroEnabled ? "Поворот телефона" : "Управление пальцем";
+  }
+  revealUi();
+}
 
 const videoTexture = new THREE.VideoTexture(video);
 videoTexture.colorSpace = THREE.SRGBColorSpace;
@@ -280,6 +358,17 @@ function updatePlayButtons() {
   playerScreen.classList.toggle("is-playing", state.isPlaying);
 }
 
+function setPlayingState(isPlaying) {
+  state.isPlaying = isPlaying;
+  updatePlayButtons();
+  if (isPlaying) {
+    scheduleUiHide();
+    return;
+  }
+  clearUiHideTimer();
+  setUiVisible(true);
+}
+
 function updateVrButtonState() {
   if (!vrButton) {
     return;
@@ -352,7 +441,7 @@ function applyProjectionMode() {
     if (modeBadge) modeBadge.textContent = state.mode;
   }
 
-  controls.enabled = true;
+  controls.enabled = !state.gyroEnabled;
   camera.position.set(0, 0, 0.01);
   controls.target.set(0, 0, 0);
   controls.update();
@@ -367,14 +456,57 @@ function requestFullscreenOn(targetElement) {
   targetElement.requestFullscreen?.().catch(() => {});
 }
 
+function setPseudoFullscreen(enabled) {
+  state.pseudoFullscreen = enabled;
+  document.documentElement.classList.toggle("is-pseudo-fullscreen", enabled);
+  playerScreen.classList.toggle("is-pseudo-fullscreen", enabled);
+  fullscreenButton.classList.toggle("is-active", enabled);
+  window.setTimeout(resizeViewer, 80);
+}
+
+function ensureFullscreenState() {
+  if (!document.fullscreenElement && !state.pseudoFullscreen) {
+    setPseudoFullscreen(true);
+  }
+}
+
 async function toggleFullscreen() {
   try {
     if (document.fullscreenElement) {
       await document.exitFullscreen();
+      fullscreenButton.classList.remove("is-active");
     } else {
-      await playerScreen.requestFullscreen?.();
+      const request = playerScreen.requestFullscreen || playerScreen.webkitRequestFullscreen || playerScreen.msRequestFullscreen;
+      if (request) {
+        await request.call(playerScreen);
+        if (document.fullscreenElement === playerScreen) {
+          fullscreenButton.classList.add("is-active");
+          window.setTimeout(ensureFullscreenState, 150);
+        } else {
+          setPseudoFullscreen(true);
+        }
+      } else {
+        setPseudoFullscreen(!state.pseudoFullscreen);
+      }
     }
-  } catch {}
+  } catch {
+    setPseudoFullscreen(!state.pseudoFullscreen);
+  }
+  revealUi();
+}
+
+function startHlsIfNeeded() {
+  if (state.hls && state.hlsStopped) {
+    state.hls.startLoad();
+    state.hlsStopped = false;
+  }
+}
+
+function stopHlsIfNeeded() {
+  if (state.hls && !state.hlsStopped) {
+    state.hls.stopLoad();
+    state.hlsStopped = true;
+  }
 }
 
 function attachHls(url) {
@@ -440,6 +572,10 @@ function loadVideoSource() {
 }
 
 async function togglePlayback() {
+  if (state.playRequest) {
+    return state.playRequest;
+  }
+
   if (!state.hasStarted) {
     state.hasStarted = true;
   }
@@ -449,22 +585,31 @@ async function togglePlayback() {
   }
 
   if (video.paused) {
+    startHlsIfNeeded();
+    state.playRequest = video.play();
     try {
-      await video.play();
-      state.isPlaying = true;
-      updatePlayButtons();
-      scheduleUiHide();
+      await state.playRequest;
+      setPlayingState(true);
     } catch {
+      setPlayingState(false);
       setOverlayMessage("Не удалось начать", "На телефоне воспроизведение может требовать явного нажатия пользователя.");
+    } finally {
+      state.playRequest = null;
     }
     return;
   }
 
   video.pause();
-  state.isPlaying = false;
-  updatePlayButtons();
-  clearUiHideTimer();
-  setUiVisible(true);
+  setPlayingState(false);
+}
+
+function pauseForLifecycle() {
+  state.playRequest = null;
+  if (!video.paused) {
+    video.pause();
+  }
+  stopHlsIfNeeded();
+  setPlayingState(false);
 }
 
 function nudgeTime(seconds) {
@@ -495,16 +640,18 @@ function getTouchDistance(touches) {
 }
 
 function handleTouchStart(event) {
+  event.preventDefault();
+  revealUi();
   if (event.touches.length === 2) {
     state.touchZoomDistance = getTouchDistance(event.touches);
   }
 }
 
 function handleTouchMove(event) {
+  event.preventDefault();
   if (event.touches.length !== 2) {
     return;
   }
-  event.preventDefault();
   const nextDistance = getTouchDistance(event.touches);
   if (!state.touchZoomDistance) {
     state.touchZoomDistance = nextDistance;
@@ -527,7 +674,11 @@ function updateVolumeButtonState() {
 
 function animate() {
   requestAnimationFrame(animate);
-  controls.update();
+  if (state.gyroEnabled) {
+    updateGyroscopeCamera();
+  } else {
+    controls.update();
+  }
   if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
     videoTexture.needsUpdate = true;
   }
@@ -567,6 +718,7 @@ volumeButton.addEventListener("click", () => {
 });
 
 fullscreenButton.addEventListener("click", toggleFullscreen);
+gyroButton?.addEventListener("click", toggleGyroscope);
 backButton.addEventListener("click", returnToLanding);
 
 if (vrButton) {
@@ -575,14 +727,14 @@ if (vrButton) {
       state.stereoView = !state.stereoView;
       applyProjectionMode();
     }
-    controls.enabled = true;
+    controls.enabled = !state.gyroEnabled;
     controls.update();
     revealUi();
   });
 }
 
 viewer.addEventListener("wheel", handleViewerWheel, { passive: false });
-viewer.addEventListener("touchstart", handleTouchStart, { passive: true });
+viewer.addEventListener("touchstart", handleTouchStart, { passive: false });
 viewer.addEventListener("touchmove", handleTouchMove, { passive: false });
 viewer.addEventListener("touchend", handleTouchEnd, { passive: true });
 viewer.addEventListener("touchcancel", handleTouchEnd, { passive: true });
@@ -621,16 +773,12 @@ qualitySelect.addEventListener("change", (event) => {
 });
 
 video.addEventListener("play", () => {
-  state.isPlaying = true;
-  updatePlayButtons();
-  scheduleUiHide();
+  startHlsIfNeeded();
+  setPlayingState(true);
 });
 
 video.addEventListener("pause", () => {
-  state.isPlaying = false;
-  updatePlayButtons();
-  clearUiHideTimer();
-  setUiVisible(true);
+  setPlayingState(false);
 });
 
 video.addEventListener("loadedmetadata", () => {
@@ -657,6 +805,29 @@ seekBar.addEventListener("input", (event) => {
 });
 
 window.addEventListener("resize", resizeViewer);
+document.addEventListener("fullscreenchange", () => {
+  fullscreenButton.classList.toggle("is-active", Boolean(document.fullscreenElement));
+  if (document.fullscreenElement && state.pseudoFullscreen) {
+    setPseudoFullscreen(false);
+  }
+  resizeViewer();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pauseForLifecycle();
+  }
+});
+
+window.addEventListener("pagehide", () => {
+  pauseForLifecycle();
+});
+
+window.addEventListener("blur", () => {
+  if (document.hidden) {
+    pauseForLifecycle();
+  }
+});
 
 document.addEventListener("keydown", (event) => {
   if (event.code === "Space") {
