@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./styles.css?v=20260817-56">
+    <link rel="stylesheet" href="./styles.css?v=20260821-71">
 </head>
 <body>
   <div class="page-shell">
@@ -49,6 +49,36 @@
         <div class="video-backdrop"></div>
         <video id="video" class="video-surface" playsinline webkit-playsinline preload="metadata"></video>
         <div id="viewer" class="projection-viewer"></div>
+        <div class="motion-hint-overlay" id="motionHintOverlay" aria-hidden="true">
+          <div class="motion-hint-stage motion-hint-stage-touch">
+            <div class="motion-hint-track" aria-hidden="true">
+              <span class="motion-hint-arrow-left"></span>
+              <span class="motion-hint-arrow-right"></span>
+              <svg class="motion-hint-hand" viewBox="0 0 96 96" focusable="false">
+                <path d="M39 69V36c0-4 3-7 7-7s7 3 7 7v16l3-3c3-3 8-2 10 1l5 8c2 3 2 7 0 10l-7 11c-2 4-6 6-11 6H43c-5 0-10-3-12-8l-5-13c-1-4 1-8 5-9 3-1 7 1 8 4Z" />
+                <path d="M30 30c3-8 10-14 19-14s16 5 19 13" />
+              </svg>
+            </div>
+            <div class="motion-hint-text">Swipe left and right</div>
+          </div>
+          <div class="motion-hint-stage motion-hint-stage-mouse">
+            <div class="motion-hint-track motion-hint-track-mouse" aria-hidden="true">
+              <svg class="motion-hint-mouse" viewBox="0 0 96 96" focusable="false">
+                <rect x="31" y="14" width="34" height="56" rx="17" />
+                <circle class="motion-hint-wheel-glow" cx="48" cy="27" r="8" />
+                <path class="motion-hint-wheel" d="M48 20v14" />
+                <path d="M35 78h26" />
+              </svg>
+              <div class="motion-hint-zoom-axis">
+                <span class="motion-hint-zoom-label">Zoom In</span>
+                <span class="motion-hint-zoom-line"></span>
+                <span class="motion-hint-zoom-label">Zoom Out</span>
+              </div>
+            </div>
+            <div class="motion-hint-text">Scroll to zoom</div>
+          </div>
+          <div class="motion-hint-note">For Patreon and Boosty subscribers only</div>
+        </div>
         <button type="button" class="back-button" id="backButton" aria-label="Вернуться назад">
           <span class="back-button-arrow">‹</span>
           <span class="back-button-text">BACK</span>
@@ -136,6 +166,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
-  <script type="module" src="./app.js?v=20260817-56"></script>
+  <script type="module" src="./app.js?v=20260821-71"></script>
 </body>
 </html>

@@ -2,12 +2,13 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const params = new URLSearchParams(window.location.search);
+const defaultVideoUrl = "https://vrmotion-cdn.b-cdn.net/anna-vr180/master.m3u8";
 
 const state = {
   hls: null,
   isPlaying: false,
   hasStarted: false,
-  videoUrl: params.get("v") || "",
+  videoUrl: params.get("v") || defaultVideoUrl,
   posterUrl: params.get("poster") || "./assets/girls_background.png",
   title: params.get("title") || "VRMotion Online Player",
   description: params.get("desc") || "Простой online VR/360 player. Для адаптивного качества передай HLS master playlist .m3u8.",
@@ -18,9 +19,18 @@ const state = {
   uiHideTimer: 0,
   gyroEnabled: false,
   deviceOrientation: null,
+  manualYaw: 0,
+  manualPitch: 0,
+  touchLookX: 0,
+  touchLookY: 0,
+  pointerLookActive: false,
+  pointerLookX: 0,
+  pointerLookY: 0,
   playRequest: null,
   hlsStopped: false,
   pseudoFullscreen: false,
+  motionHintTimer: 0,
+  motionHintShown: false,
 };
 
 function normalizeMode(value) {
@@ -62,6 +72,7 @@ const gyroButton = document.getElementById("gyroButton");
 const backButton = document.getElementById("backButton");
 const vrButton = document.getElementById("vrButton");
 const playerCenterOverlay = document.getElementById("playerCenterOverlay");
+const motionHintOverlay = document.getElementById("motionHintOverlay");
 const playerHint = document.getElementById("playerHint");
 const playerSubhint = document.getElementById("playerSubhint");
 const playerTitle = document.getElementById("videoTitle");
@@ -139,6 +150,10 @@ const gyroEuler = new THREE.Euler();
 const gyroQ0 = new THREE.Quaternion();
 const gyroQ1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
 const gyroZAxis = new THREE.Vector3(0, 0, 1);
+const manualYawAxis = new THREE.Vector3(0, 1, 0);
+const manualPitchAxis = new THREE.Vector3(1, 0, 0);
+const manualYawQuaternion = new THREE.Quaternion();
+const manualPitchQuaternion = new THREE.Quaternion();
 
 function handleDeviceOrientation(event) {
   state.deviceOrientation = event;
@@ -157,6 +172,8 @@ function updateGyroscopeCamera() {
   camera.quaternion.setFromEuler(gyroEuler);
   camera.quaternion.multiply(gyroQ1);
   camera.quaternion.multiply(gyroQ0.setFromAxisAngle(gyroZAxis, -screenAngle));
+  camera.quaternion.multiply(manualYawQuaternion.setFromAxisAngle(manualYawAxis, state.manualYaw));
+  camera.quaternion.multiply(manualPitchQuaternion.setFromAxisAngle(manualPitchAxis, state.manualPitch));
 }
 
 async function toggleGyroscope() {
@@ -175,16 +192,19 @@ async function toggleGyroscope() {
   state.gyroEnabled = !state.gyroEnabled;
   controls.enabled = !state.gyroEnabled;
   state.deviceOrientation = null;
+  state.touchLookX = 0;
+  state.touchLookY = 0;
+  state.pointerLookActive = false;
   window.removeEventListener("deviceorientation", handleDeviceOrientation);
   if (state.gyroEnabled) {
     window.addEventListener("deviceorientation", handleDeviceOrientation, true);
   }
   gyroButton?.classList.toggle("is-active", state.gyroEnabled);
   gyroButton?.setAttribute("aria-label", state.gyroEnabled
-    ? "Сейчас управление поворотом телефона. Нажмите для управления пальцем"
-    : "Сейчас управление пальцем. Нажмите для управления поворотом телефона");
+    ? "Phone motion and finger drag are enabled"
+    : "Finger drag is enabled. Tap to add phone motion");
   if (gyroButton) {
-    gyroButton.title = state.gyroEnabled ? "Поворот телефона" : "Управление пальцем";
+    gyroButton.title = state.gyroEnabled ? "Phone motion + finger drag" : "Finger drag";
   }
   revealUi();
 }
@@ -304,6 +324,23 @@ function setOverlayMessage(title, subtitle) {
   }
 }
 
+function hideMotionHint() {
+  if (state.motionHintTimer) {
+    window.clearTimeout(state.motionHintTimer);
+    state.motionHintTimer = 0;
+  }
+  motionHintOverlay?.classList.remove("is-visible");
+}
+
+function showMotionHint() {
+  if (!motionHintOverlay || state.motionHintShown) {
+    return;
+  }
+  state.motionHintShown = true;
+  motionHintOverlay.classList.add("is-visible");
+  state.motionHintTimer = window.setTimeout(hideMotionHint, 6500);
+}
+
 function openPlayer() {
   landingScreen.classList.add("is-hidden");
   playerScreen.classList.remove("is-hidden");
@@ -314,6 +351,8 @@ async function returnToLanding() {
   video.pause();
   state.isPlaying = false;
   state.hasStarted = false;
+  state.motionHintShown = false;
+  hideMotionHint();
   clearUiHideTimer();
   setUiVisible(true);
   updatePlayButtons();
@@ -370,9 +409,11 @@ function setPlayingState(isPlaying) {
   state.isPlaying = isPlaying;
   updatePlayButtons();
   if (isPlaying) {
+    showMotionHint();
     scheduleUiHide();
     return;
   }
+  hideMotionHint();
   clearUiHideTimer();
   setUiVisible(true);
 }
@@ -647,9 +688,24 @@ function getTouchDistance(touches) {
   return Math.hypot(dx, dy);
 }
 
+function addManualLookDelta(deltaX, deltaY) {
+  const lookSpeed = 0.0042;
+  state.manualYaw += deltaX * lookSpeed;
+  state.manualPitch = THREE.MathUtils.clamp(
+    state.manualPitch + deltaY * lookSpeed,
+    -Math.PI * 0.42,
+    Math.PI * 0.42
+  );
+}
+
 function handleTouchStart(event) {
   event.preventDefault();
   revealUi();
+  if (state.gyroEnabled && event.touches.length === 1) {
+    state.touchLookX = event.touches[0].clientX;
+    state.touchLookY = event.touches[0].clientY;
+    return;
+  }
   if (event.touches.length === 2) {
     state.touchZoomDistance = getTouchDistance(event.touches);
   }
@@ -657,6 +713,16 @@ function handleTouchStart(event) {
 
 function handleTouchMove(event) {
   event.preventDefault();
+  if (state.gyroEnabled && event.touches.length === 1) {
+    const touch = event.touches[0];
+    if (state.touchLookX || state.touchLookY) {
+      addManualLookDelta(touch.clientX - state.touchLookX, touch.clientY - state.touchLookY);
+    }
+    state.touchLookX = touch.clientX;
+    state.touchLookY = touch.clientY;
+    revealUi();
+    return;
+  }
   if (event.touches.length !== 2) {
     return;
   }
@@ -673,6 +739,35 @@ function handleTouchMove(event) {
 
 function handleTouchEnd() {
   state.touchZoomDistance = 0;
+  state.touchLookX = 0;
+  state.touchLookY = 0;
+}
+
+function handlePointerDown(event) {
+  if (!state.gyroEnabled || event.pointerType !== "mouse") {
+    return;
+  }
+  state.pointerLookActive = true;
+  state.pointerLookX = event.clientX;
+  state.pointerLookY = event.clientY;
+  viewer.classList.add("is-dragging");
+}
+
+function handlePointerMove(event) {
+  if (!state.gyroEnabled || !state.pointerLookActive || event.pointerType !== "mouse") {
+    return;
+  }
+  addManualLookDelta(event.clientX - state.pointerLookX, event.clientY - state.pointerLookY);
+  state.pointerLookX = event.clientX;
+  state.pointerLookY = event.clientY;
+  revealUi();
+}
+
+function handlePointerEnd() {
+  state.pointerLookActive = false;
+  state.pointerLookX = 0;
+  state.pointerLookY = 0;
+  viewer.classList.remove("is-dragging");
 }
 
 function updateVolumeButtonState() {
@@ -752,6 +847,11 @@ viewer.addEventListener("touchstart", handleTouchStart, { passive: false });
 viewer.addEventListener("touchmove", handleTouchMove, { passive: false });
 viewer.addEventListener("touchend", handleTouchEnd, { passive: true });
 viewer.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+viewer.addEventListener("pointerdown", handlePointerDown);
+viewer.addEventListener("pointerup", handlePointerEnd);
+viewer.addEventListener("pointercancel", handlePointerEnd);
+viewer.addEventListener("pointerleave", handlePointerEnd);
+viewer.addEventListener("pointermove", handlePointerMove);
 viewer.addEventListener("pointermove", () => {
   if (state.isPlaying) {
     revealUi();
