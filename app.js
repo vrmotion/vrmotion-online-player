@@ -4,6 +4,25 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 const params = new URLSearchParams(window.location.search);
 const defaultVideoUrl = "https://vrmotion-cdn.b-cdn.net/anna-vr180/master.m3u8";
 
+function applyLayoutMode() {
+  const shortestScreen = Math.min(window.screen?.width || window.innerWidth, window.screen?.height || window.innerHeight);
+  const hasTouch = navigator.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches;
+  const desktopLayout = window.innerWidth >= 900 && (!hasTouch || shortestScreen > 900);
+  document.documentElement.classList.toggle("is-desktop-layout", desktopLayout);
+}
+
+function isDesktopLayout() {
+  return document.documentElement.classList.contains("is-desktop-layout");
+}
+
+function setDesktopPlayerFullscreen(enabled) {
+  document.documentElement.classList.toggle("is-desktop-player-fullscreen", Boolean(enabled && isDesktopLayout()));
+}
+
+applyLayoutMode();
+window.addEventListener("resize", applyLayoutMode, { passive: true });
+window.screen?.orientation?.addEventListener?.("change", applyLayoutMode);
+
 const state = {
   hls: null,
   isPlaying: false,
@@ -344,6 +363,7 @@ function showMotionHint() {
 function openPlayer() {
   landingScreen.classList.add("is-hidden");
   playerScreen.classList.remove("is-hidden");
+  setDesktopPlayerFullscreen(true);
   resizeViewer();
 }
 
@@ -363,6 +383,7 @@ async function returnToLanding() {
   }
   playerScreen.classList.add("is-hidden");
   landingScreen.classList.remove("is-hidden");
+  setDesktopPlayerFullscreen(false);
 }
 
 function clearUiHideTimer() {
@@ -918,7 +939,11 @@ seekBar.addEventListener("input", (event) => {
   revealUi();
 });
 
-window.addEventListener("resize", resizeViewer);
+window.addEventListener("resize", () => {
+  applyLayoutMode();
+  setDesktopPlayerFullscreen(!playerScreen.classList.contains("is-hidden"));
+  resizeViewer();
+});
 document.addEventListener("fullscreenchange", () => {
   fullscreenButton.classList.toggle("is-active", Boolean(document.fullscreenElement));
   if (document.fullscreenElement && state.pseudoFullscreen) {
